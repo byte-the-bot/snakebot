@@ -1,0 +1,34 @@
+# v1 API Dockerfile for snakebot.
+#
+# The original Dockerfile uses archlinux + Node 9 + node-gyp + python2 to
+# compile the cpp_sim native module. That toolchain is brittle on modern
+# hosts and has no ARM64 path, so this image runs snakebot through the
+# v1_server.js shim with a pure-JS algorithm (default: hungry) and skips
+# the native build entirely.
+#
+# To switch algorithms, set SNAKEBOT_ALGORITHM at runtime
+# (e.g. terminator, defensive_hungry, dumb_dog, minority_report).
+
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# Only express and body-parser are needed for the original snake; the shim
+# itself uses Node stdlib (http) so we only need the algorithm dependencies.
+# We skip `bindings` since it's only used by cpp_* algorithms.
+COPY package.json ./
+RUN npm install --omit=dev --ignore-scripts --no-package-lock || true
+
+# Source
+COPY . .
+
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production \
+    SNAKEBOT_ALGORITHM=hungry \
+    PORT=5000
+
+COPY --from=build /app /app
+
+EXPOSE 5000
+
+CMD ["node", "v1_server.js"]
